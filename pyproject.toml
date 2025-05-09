@@ -1,0 +1,11 @@
+[tool.black]
+line-length = 79
+
+[tool.isort]
+profile = "black"               # или другой ваш профиль
+src_paths = ["news", "notes"]   # чтобы isort знал, где искать ваш код
+known_first_party = ["news", "notes"]
+line_length = 88                # по вашей ширине строки
+multi_line_output = 3           # или ваш предпочитаемый стиль
+include_trailing_comma = true
+
