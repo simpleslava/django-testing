@@ -8,27 +8,6 @@ from notes.models import Note
 User = get_user_model()
 
 
-PUBLIC_URLS = [
-    ('users:login', []),
-    ('users:signup', []),
-    ('users:logout', []),
-]
-
-
-AUTH_URLS = [
-    ('notes:list', []),
-    ('notes:add', []),
-    ('notes:success', []),
-]
-
-
-AUTHOR_URLS = [
-    ('notes:detail', ['note.slug']),
-    ('notes:edit', ['note.slug']),
-    ('notes:delete', ['note.slug']),
-]
-
-
 class TestRoutes(TestCase):
 
     @classmethod
@@ -51,55 +30,64 @@ class TestRoutes(TestCase):
         cls.logout_url = reverse('users:logout')
         cls.signup_url = reverse('users:signup')
 
-    def test_homepage_redirects_anonymous_to_login(self):
-        response = self.client.get(reverse('notes:list'))
-        self.assertEqual(response.status_code, HTTPStatus.FOUND)
-        self.assertEqual(
-            response.url,
-            f'{self.login_url}?next={reverse("notes:list")}'
-        )
-
     def test_auth_pages_available_for_all(self):
-        for method, url in [
+        """Страницы аутентификации доступны всем."""
+        urls = (
             ('get', self.login_url),
             ('post', self.logout_url),
             ('get', self.signup_url),
-        ]:
+        )
+        for method, url in urls:
             with self.subTest(url=url, method=method):
                 response = getattr(self.client, method)(url)
                 self.assertEqual(response.status_code, HTTPStatus.OK)
 
+    def test_homepage_redirects_anonymous_to_login(self):
+        """Главная страница перенаправляет анонимного пользователя на вход."""
+        response = self.client.get(reverse('notes:list'))
+        self.assertEqual(response.status_code, HTTPStatus.FOUND)
+        self.assertRedirects(
+            response,
+            f'{self.login_url}?next={reverse("notes:list")}'
+        )
+
     def test_authenticated_user_pages(self):
+        """Страницы для авторизованных пользователей доступны."""
         self.client.force_login(self.author)
-        for url in [
+        urls = [
             reverse('notes:list'),
             reverse('notes:add'),
             reverse('notes:success'),
-        ]:
+        ]
+        for url in urls:
             with self.subTest(url=url):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_author_pages(self):
+        """Страницы для автора заметки доступны."""
         self.client.force_login(self.author)
-        for url in [
+        urls = [
             reverse('notes:detail', args=[self.note.slug]),
             reverse('notes:edit', args=[self.note.slug]),
             reverse('notes:delete', args=[self.note.slug]),
-        ]:
+        ]
+        for url in urls:
             with self.subTest(url=url):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_redirect_protected_pages_for_anonymous(self):
-        for url in [
+        """Защищенные страницы перенаправляют анонимного пользователя."""
+        urls = [
             reverse('notes:list'),
             reverse('notes:add'),
             reverse('notes:success'),
             reverse('notes:detail', args=[self.note.slug]),
             reverse('notes:edit', args=[self.note.slug]),
             reverse('notes:delete', args=[self.note.slug]),
-        ]:
+        ]
+        for url in urls:
             with self.subTest(url=url):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, HTTPStatus.FOUND)

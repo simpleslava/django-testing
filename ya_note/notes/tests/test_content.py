@@ -4,9 +4,12 @@ from .base_test_class import BaseTest
 
 class TestNoteContent(BaseTest):
     """Тестирование содержимого страниц, связанных с заметками."""
+
+    def setUp(self):
+        self.client.force_login(self.author)
+
     def test_note_in_object_list(self):
         """Проверяет, что созданная заметка присутствует в списке."""
-        self.client.force_login(self.author)
         response = self.client.get(self.url_list)
         self.assertIn(self.note, response.context['object_list'])
 
@@ -18,10 +21,9 @@ class TestNoteContent(BaseTest):
 
     def test_form_in_context(self):
         """Наличие формы в контексте страниц создания и редактирования."""
-        self.client.force_login(self.author)
         urls = (self.url_add, self.url_edit)
-
         for url in urls:
             with self.subTest(url=url):
                 response = self.client.get(url)
-                self.assertIsInstance(response.context.get('form'), NoteForm)
+                self.assertIn('form', response.context)
+                self.assertIsInstance(response.context['form'], NoteForm)
