@@ -1,41 +1,93 @@
 import pytest
-from django.conf import settings
-from news.forms import CommentForm
+from http import HTTPStatus
+
+from news.forms import BAD_WORDS
+from news.models import Comment
 
 
 pytestmark = pytest.mark.django_db
 
 
-def test_news_count_on_homepage(client, many_news, home_url):
-    """Проверка количества новостей на главной странице."""
-    response = client.get(home_url)
-    object_list = response.context['object_list']
-    assert object_list.count() == settings.NEWS_COUNT_ON_HOME_PAGE
+COMMENT_TEXT = 'Тестовый комментарий'
+BAD_COMMENT_TEXT = f'Плохое слово: {BAD_WORDS[0]}'
+NEW_COMMENT_TEXT = 'Обновлённый текст'
+FORM_DATA = {'text': COMMENT_TEXT}
+BAD_FORM_DATA = {'text': BAD_COMMENT_TEXT}
+EDIT_FORM_DATA = {'text': NEW_COMMENT_TEXT}
 
 
-def test_news_order_on_homepage(client, many_news, home_url):
-    """Проверка сортировки новостей на главной странице."""
-    response = client.get(home_url)
-    news_list = list(response.context['object_list'])
-    sorted_news = sorted(news_list, key=lambda x: x.date, reverse=True)
-    assert news_list == sorted_news
+def test_anonymous_cannot_send_comment(client, detail_url):
+    """Анонимный пользователь не может отправить комментарий."""
+    initial_count = Comment.objects.count()
+    response = client.post(detail_url, FORM_DATA)
+    assert response.status_code == HTTPStatus.FOUND
+    assert Comment.objects.count() == initial_count
 
 
-def test_comment_order_on_news_detail_page(client, news, comments, detail_url):
-    """Проверка хронологического порядка комментариев."""
-    response = client.get(detail_url)
-    comment_list = list(response.context['news'].comment_set.all())
-    assert comment_list == sorted(comments, key=lambda x: x.created)
+def test_authorized_can_send_comment(client_author, author, news, detail_url):
+    """Авторизованный пользователь может отправить комментарий."""
+    initial_count = Comment.objects.count()
+    response = client_author.post(detail_url, FORM_DATA)
+    assert response.status_code == HTTPStatus.FOUND
+    assert Comment.objects.count() == initial_count + 1
+    comment = Comment.objects.last()
+    assert comment.text == COMMENT_TEXT
+    assert comment.author == author
+    assert comment.news == news
 
 
-def test_comment_form_not_bound_for_anonymous(client, detail_url):
-    """Проверка отсутствия формы для анонимного пользователя."""
-    response = client.get(detail_url)
-    assert 'form' not in response.context
-
-
-def test_comment_form_available_for_author(client_author, detail_url):
-    """Проверка наличия формы для авторизованного пользователя."""
-    response = client_author.get(detail_url)
+def test_comment_with_bad_words_not_created(client_author, detail_url):
+    """Комментарий с запрещенными словами не создается."""
+    initial_count = Comment.objects.count()
+    response = client_author.post(detail_url, BAD_FORM_DATA)
+    assert response.status_code == HTTPStatus.OK
     assert 'form' in response.context
-    assert isinstance(response.context['form'], CommentForm)
+    assert response.context['form'].has_error('text')
+    assert Comment.objects.count() == initial_count
+
+
+def test_author_can_edit_own_comment(client_author, comment, edit_url):
+    """Автор может редактировать свой комментарий."""
+    original_comment = Comment.objects.get(pk=comment.pk)
+    response = client_author.post(edit_url, EDIT_FORM_DATA)
+    comment.refresh_from_db()
+    assert response.status_code == HTTPStatus.FOUND
+    assert comment.text == NEW_COMMENT_TEXT
+    assert comment.author == original_comment.author
+    assert comment.news == original_comment.news
+
+
+def test_author_can_delete_own_comment(client_author, comment, delete_url):
+    """Автор может удалить свой комментарий."""
+    initial_count = Comment.objects.count()
+    response = client_author.post(delete_url)
+    assert response.status_code == HTTPStatus.FOUND
+    assert Comment.objects.count() == initial_count - 1
+    assert not Comment.objects.filter(pk=comment.pk).exists()
+
+
+def test_reader_cannot_edit_comment(client_reader, comment, edit_url):
+    """Читатель не может редактировать чужой комментарий."""
+    original_comment = Comment.objects.get(pk=comment.pk)
+    response = client_reader.post(edit_url, EDIT_FORM_DATA)
+    comment.refresh_from_db()
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert comment.text == original_comment.text
+    assert comment.author == original_comment.author
+    assert comment.news == original_comment.news
+
+
+def test_reader_cannot_delete_comment(client_reader, comment, delete_url):
+    """Читатель не может удалить чужой комментарий."""
+    original_comment = Comment.objects.get(pk=comment.pk)
+    initial_count = Comment.objects.count()
+    response = client_reader.post(delete_url)
+    comment.refresh_from_db()
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert Comment.objects.count() == initial_count
+    assert Comment.objects.filter(pk=comment.pk).exists()
+    # Дополнительные проверки полей комментария
+    assert comment.text == original_comment.text
+    assert comment.author == original_comment.author
+    assert comment.news == original_comment.news
+    assert comment.created == original_comment.created

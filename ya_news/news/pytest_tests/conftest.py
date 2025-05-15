@@ -13,6 +13,21 @@ EXTRA_NEWS = 5
 
 
 @pytest.fixture
+def detail_url(news):
+    return reverse('news:detail', args=[news.pk])
+
+
+@pytest.fixture
+def edit_url(comment):
+    return reverse('news:edit', args=[comment.pk])
+
+
+@pytest.fixture
+def delete_url(comment):
+    return reverse('news:delete', args=[comment.pk])
+
+
+@pytest.fixture
 def author(django_user_model):
     return django_user_model.objects.create_user(
         username='author',
@@ -65,11 +80,6 @@ def home_url():
 
 
 @pytest.fixture
-def detail_url(news):
-    return reverse('news:detail', args=[news.pk])
-
-
-@pytest.fixture
 def login_url():
     return reverse('users:login')
 
@@ -82,16 +92,6 @@ def logout_url():
 @pytest.fixture
 def signup_url():
     return reverse('users:signup')
-
-
-@pytest.fixture
-def edit_url(comment):
-    return reverse('news:edit', args=[comment.pk])
-
-
-@pytest.fixture
-def delete_url(comment):
-    return reverse('news:delete', args=[comment.pk])
 
 
 @pytest.fixture
